@@ -39,8 +39,17 @@ class RequestApi:
         try:
             response.raise_for_status()
             return response
-        except requests.HTTPError as e:
-            raise requests.HTTPError(e)
+        except requests.HTTPError:
+            raise
+
+    @retry(Exception, total_tries=2, logger=logger)
+    def get(self, api_path: str, payload: dict = None, headers: dict = None) -> requests.models.Response:
+        response = requests.get(f'{self.base_url}{api_path}', json=payload, headers=headers)
+        try:
+            response.raise_for_status()
+            return response
+        except requests.HTTPError:
+            raise
 
     @retry(Exception, total_tries=2, logger=logger)
     def post(self, api_path: str, payload: dict = None, headers: dict = None) -> requests.models.Response:
@@ -81,12 +90,11 @@ class RequestApi:
 
 class JsonPlaceholderModifier:
     def __init__(self):
-        self.requester = RequestApi('http://jsonplaceholder.typicode.comget')
+        self.requester = RequestApi('http://jsonplaceholder.typicode.com')
 
     def get_post_field(self, post_number: str, field: str) -> str:
         try:
             post = self.requester.get(f'/posts/{post_number}')
-            post.raise_for_status()
             return post.json()[field]
         except KeyError:
             logger.error(f'Error, field: {field} does not exist for post number: {post_number}.')
@@ -94,34 +102,42 @@ class JsonPlaceholderModifier:
             logger.error(f'Error, {err}.')
 
     def insert_new_field(self, post_number: str, field_key: str, field_value: str) -> dict:
-        post = self.requester.get(f'/posts/{post_number}').json()
-        post[field_key] = field_value
-        return post
+        try:
+            post = self.requester.get(f'/posts/{post_number}').json()
+        except requests.HTTPError as err:
+            logger.error(f'Error, {err}.')
+        else:
+            post[field_key] = field_value
+            return post
 
     def create_new_post(self, body: dict) -> requests.models.Response:
-        return self.requester.post(
-            '/posts',
-            payload=body,
-            headers={'Content-type': 'application/json; charset=UTF-8'}
-        )
-
-    def gather_post_info(self):
-        pass
+        try:
+            return self.requester.post(
+                '/posts',
+                payload=body,
+                headers={'Content-type': 'application/json; charset=UTF-8'}
+            )
+        except requests.HTTPError as err:
+            logger.error(f'Error, {err}.')
 
     def delete_post(self, post_id: str) -> requests.models.Response:
-        return self.requester.delete(f'/posts/{post_id}')
+        try:
+            return self.requester.delete(f'/posts/{post_id}')
+        except requests.HTTPError as err:
+            logger.error(f'Error, {err}.')
 
 
-a = JsonPlaceholderModifier()
+if __name__ == '__main__':
+    a = JsonPlaceholderModifier()
 
-print(a.get_post_field('99', 'title'))
-# print(a.get_post_field('101', 'title'))
-# pprint(a.insert_new_field('100', 'time', datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")))
-# b = a.create_new_post({
-#     'title': 'Security Interview Post',
-#     'userId': 500,
-#     'body': 'This is an insertion test with a known API'
-# })
-# print((b.status_code, b.json()['id'], b.headers.get('x-powered-by')))
-# c = a.delete_post('101')
-# pprint((c.status_code, c.headers.get('x-content-type-options')))
+    print(a.get_post_field('99', 'title'))
+    # print(a.get_post_field('101', 'title'))
+    pprint(a.insert_new_field('100', 'time', datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")))
+    b = a.create_new_post({
+        'title': 'Security Interview Post',
+        'userId': 500,
+        'body': 'This is an insertion test with a known API'
+    })
+    print((b.status_code, b.json()['id'], b.headers.get('x-powered-by')))
+    c = a.delete_post('101')
+    pprint((c.status_code, c.headers.get('x-content-type-options')))
