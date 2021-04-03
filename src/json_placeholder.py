@@ -131,13 +131,13 @@ if __name__ == '__main__':
     a = JsonPlaceholderModifier()
 
     print(a.get_post_field('99', 'title'))
-    # print(a.get_post_field('101', 'title'))
-    pprint(a.insert_new_field('100', 'time', datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")))
+    pprint(a.insert_new_field('100', 'time', datetime.now(timezone.utc).strftime("%m/%d/%Y %H:%M:%S")))
     b = a.create_new_post({
         'title': 'Security Interview Post',
         'userId': 500,
         'body': 'This is an insertion test with a known API'
     })
-    print((b.status_code, b.json()['id'], b.headers.get('x-powered-by')))
+    resp_tuple = (b.json()['id'], b.status_code, b.headers.get('x-powered-by'))
+    print(f'id: {resp_tuple[0]}, resp_code: {resp_tuple[1]}, "x-Powered-By" header: {resp_tuple[2]}')
     c = a.delete_post('101')
-    pprint((c.status_code, c.headers.get('x-content-type-options')))
+    print((c.status_code, c.headers.get('x-content-type-options')))
